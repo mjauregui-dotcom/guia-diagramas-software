@@ -1,0 +1,571 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Guía Interactiva de Diagramas de Software</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Chosen Palette: Warm Neutrals -->
+    <!-- Application Structure Plan: The application is structured as an interactive dashboard. The primary navigation divides the diagrams into logical categories (Structural, Behavioral, and Design Techniques) to reduce cognitive load. A secondary navigation bar appears for the selected category, allowing the user to choose a specific diagram. The main content area dynamically updates via JavaScript to display detailed information about the selected diagram (definition, components, structure, ideal scenario). The LLM is integrated via two functions: one to generate a standard, foundational example on demand, and another to generate a detailed, custom scenario based on user input, ensuring maximum practical utility. -->
+    <!-- Visualization & Content Choices: 
+        - Report Info: 11 types of software engineering diagrams/techniques.
+        - Goal: Inform and educate on each item's purpose, components, use case, and provide contextual examples.
+        - Presentation Method: A card-based layout for each diagram's details. Key components are shown in a grid.
+        - Interaction: Users click category and then diagram buttons. Two buttons are available for LLM interaction: 'Standard Example' and 'Custom Scenario Generation', both dynamically updating a result area. This provides both quick context and deep customization.
+        - Justification: The dual-example approach satisfies the need for immediate, clear context (Standard Example) and advanced, domain-specific learning (Custom Scenario), making the application highly flexible and educationally valuable.
+        - Library/Method: Vanilla JS, Tailwind CSS, Gemini API.
+    -->
+    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f8f7f4; 
+            color: #333;
+        }
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap');
+        .active-category {
+            background-color: #387ADF !important;
+            color: white !important;
+        }
+        .active-diagram {
+            background-color: #E0E7FF !important;
+            color: #387ADF !important;
+            border-color: #387ADF !important;
+        }
+        .component-visual {
+            min-height: 60px;
+            width: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 8px;
+            background-color: #f3f4f6;
+            border-radius: 4px;
+            margin-bottom: 8px;
+            font-size: 1.5rem;
+            line-height: 1;
+        }
+        .actor-visual {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .actor-visual .head {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background-color: #9ca3af;
+        }
+        .actor-visual .body {
+            width: 4px;
+            height: 25px;
+            background-color: #9ca3af;
+            position: relative;
+        }
+        .actor-visual .body::before, .actor-visual .body::after {
+            content: '';
+            position: absolute;
+            width: 20px;
+            height: 4px;
+            background-color: #9ca3af;
+            top: 5px;
+            left: -8px;
+        }
+         .actor-visual .body::after {
+            top: auto;
+            bottom: 5px;
+            transform: rotate(45deg);
+            left: 3px;
+            width:15px
+        }
+         .actor-visual .body::before {
+            top: auto;
+            bottom: 5px;
+            transform: rotate(-45deg);
+            left: -14px;
+            width:15px
+        }
+        .loader {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #387ADF;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body class="antialiased">
+
+    <div class="container mx-auto px-4 py-8 md:py-12">
+        <header class="text-center mb-10">
+            <h1 class="text-4xl md:text-5xl font-bold text-gray-800">Guía Interactiva de Diagramas de Software</h1>
+            <p class="mt-4 text-lg text-gray-600 max-w-3xl mx-auto">
+                Una herramienta para explorar los diagramas y técnicas clave del modelado en **Ingeniería de Software**. 
+                Realizada bajo la dirección de **Moisés Jauregui Galindo** (Fecha: 29 de septiembre de 2025).
+            </p>
+        </header>
+
+        <nav id="category-nav" class="flex flex-wrap justify-center gap-2 md:gap-4 mb-8">
+            <button data-category="comportamiento" class="category-btn text-lg font-semibold py-3 px-6 rounded-lg shadow-sm transition-all duration-300 bg-white text-gray-700 hover:bg-gray-100">De Comportamiento</button>
+            <button data-category="estructural" class="category-btn text-lg font-semibold py-3 px-6 rounded-lg shadow-sm transition-all duration-300 bg-white text-gray-700 hover:bg-gray-100">Estructurales</button>
+            <button data-category="diseno" class="category-btn text-lg font-semibold py-3 px-6 rounded-lg shadow-sm transition-all duration-300 bg-white text-gray-700 hover:bg-gray-100">Técnicas de Diseño</button>
+        </nav>
+
+        <div id="diagram-nav-container" class="mb-10 min-h-[60px] flex items-center justify-center">
+            <div id="diagram-nav" class="flex flex-wrap justify-center gap-2"></div>
+        </div>
+
+        <main id="content-display">
+            <div id="initial-message" class="text-center text-gray-500 bg-white rounded-xl shadow-md p-10">
+                <h2 class="text-2xl font-bold text-gray-700 mb-2">Bienvenido</h2>
+                <p class="text-lg">Selecciona una categoría para comenzar a explorar los diagramas.</p>
+            </div>
+        </main>
+        
+        <footer id="fuentes" class="mt-16 pt-8 border-t text-center text-gray-500">
+            <h3 class="text-xl font-semibold text-gray-700 mb-4">Fuentes de Información</h3>
+            <p class="max-w-2xl mx-auto">
+                La información presentada en esta guía ha sido consolidada y adaptada principalmente de las siguientes fuentes de referencia en el campo de la ingeniería de software:
+            </p>
+            <ul class="mt-4 list-inside list-disc">
+                <li>Fowler, M. (2004). <em>UML Distilled: A Brief Guide to the Standard Object Modeling Language (3rd ed.)</em>. Addison-Wesley Professional.</li>
+                <li>Beck, K., & Andres, C. (2004). <em>Extreme Programming Explained: Embrace Change (2nd ed.)</em>. Addison-Wesley Professional. (Para Tarjetas CRC).</li>
+            </ul>
+        </footer>
+
+    </div>
+
+    <script>
+        const diagramData = {
+            'caso-de-uso': {
+                title: 'Diagrama de Caso de Uso',
+                category: 'comportamiento',
+                definition: 'Describe la funcionalidad de un sistema desde una perspectiva externa, mostrando las interacciones entre los usuarios (actores) y el sistema para lograr un objetivo específico. Responde a la pregunta: ¿qué hace el sistema y para quién?',
+                components: [
+                    { name: 'Actor', visual: '<div class="actor-visual"><div class="head"></div><div class="body"></div></div>', desc: 'Representa un rol desempeñado por un usuario o cualquier sistema externo que interactúa con el sujeto.' },
+                    { name: 'Caso de Uso', visual: '<div class="w-24 h-12 border-2 border-gray-400 rounded-full flex items-center justify-center text-sm">Acción</div>', desc: 'Una secuencia de acciones que el sistema realiza para producir un resultado observable y de valor para un actor.' },
+                    { name: 'Límite del Sistema', visual: '<div class="w-full h-full border-2 border-gray-400 rounded-lg flex items-center justify-center text-sm p-2">Sistema</div>', desc: 'Un rectángulo que define el alcance del sistema, separando los casos de uso internos de los actores externos.' },
+                    { name: 'Asociación', visual: '<div class="w-full text-gray-500">─ ─ ─ ─</div>', desc: 'Una línea sólida que conecta un actor con un caso de uso, indicando participación.' }
+                ],
+                structure: 'Un recuadro grande representa el sistema. Dentro, óvalos representan los casos de uso. Fuera, figuras de "monigote" representan a los actores. Líneas conectan a los actores con los casos de uso con los que interactúan.',
+                scenario: 'Ideal para las primeras fases del desarrollo. Se usa para capturar los requisitos funcionales, comunicar el alcance del sistema a los stakeholders y como base para las pruebas de aceptación.',
+                standardExampleTopic: 'Proceso de inicio de sesión de un usuario y gestión de cuenta.'
+            },
+            'secuencia': {
+                title: 'Diagrama de Secuencia',
+                category: 'comportamiento',
+                definition: 'Muestra cómo los objetos colaboran en un escenario particular a lo largo del tiempo. Enfatiza el orden cronológico de los mensajes intercambiados entre los objetos.',
+                components: [
+                    { name: 'Línea de Vida (Lifeline)', visual: '<div class="flex flex-col items-center"><div class="w-20 h-8 border border-gray-400">Objeto</div><div class="w-px h-10 bg-gray-400 border-l-2 border-dashed"></div></div>', desc: 'Representa a un participante individual en la interacción. La línea discontinua vertical es su existencia en el tiempo.' },
+                    { name: 'Mensaje Síncrono', visual: '<div class="w-full text-gray-500 text-2xl font-bold">→</div>', desc: 'Una flecha sólida. El emisor espera una respuesta antes de continuar.' },
+                    { name: 'Mensaje de Retorno', visual: '<div class="w-full text-gray-500 text-2xl border-b-2 border-dashed border-gray-500" style="height: 1.5rem;"></div>', desc: 'Una flecha discontinua. Indica el retorno de un mensaje síncrono.' },
+                    { name: 'Activación', visual: '<div class="w-3 h-12 bg-blue-300 border border-blue-500"></div>', desc: 'Un rectángulo estrecho sobre una línea de vida, que muestra el período durante el cual un objeto está ejecutando una operación.' }
+                ],
+                structure: 'Los objetos se listan horizontalmente en la parte superior. Líneas de vida verticales se extienden hacia abajo desde cada objeto. Flechas horizontales entre las líneas de vida representan los mensajes, ordenados de arriba hacia abajo según el tiempo.',
+                scenario: 'Excelente para detallar la lógica de un caso de uso específico. Ayuda a identificar cuellos de botella y a asignar responsabilidades a los objetos. Muy útil en el diseño detallado.',
+                standardExampleTopic: 'Flujo detallado para la validación de un pago con tarjeta de crédito.'
+            },
+            'comunicacion': {
+                title: 'Diagrama de Comunicación',
+                category: 'comportamiento',
+                definition: 'Anteriormente llamado diagrama de colaboración, muestra las interacciones entre objetos pero se centra en sus relaciones y los mensajes que intercambian, en lugar del orden temporal. Es semánticamente equivalente a un diagrama de secuencia.',
+                components: [
+                    { name: 'Objeto', visual: '<div class="w-24 h-10 border border-gray-400 flex items-center justify-center text-sm"><u>:NombreClase</u></div>', desc: 'Un rectángulo que representa una instancia de una clase.' },
+                    { name: 'Enlace', visual: '<div class="w-full h-px bg-gray-500"></div>', desc: 'Una línea sólida que conecta dos objetos, indicando que pueden enviarse mensajes.' },
+                    { name: 'Mensaje', visual: '<div class="w-full text-center text-gray-500">1: hacerAlgo() →</div>', desc: 'Una flecha etiquetada con un número de secuencia y el nombre del mensaje, dibujada a lo largo de un enlace.' }
+                ],
+                structure: 'Los objetos se colocan en cualquier parte del diagrama. Se conectan con enlaces para mostrar las rutas de comunicación. Los mensajes se numeran secuencialmente para indicar el orden, aunque la disposición espacial es flexible.',
+                scenario: 'Útil cuando el enfoque principal es la estructura de las relaciones entre objetos que colaboran, más que la cronología exacta. Ofrece una vista más clara de la "red" de comunicación.',
+                standardExampleTopic: 'Colaboración de objetos en una gestión de pedidos (Cliente, Pedido, Inventario, Pago).'
+            },
+            'estados': {
+                title: 'Diagrama de Estados',
+                category: 'comportamiento',
+                definition: 'Modela el comportamiento de un único objeto a lo largo de su vida. Muestra la secuencia de estados por los que pasa un objeto en respuesta a eventos, junto con las transiciones y las acciones que realiza.',
+                components: [
+                    { name: 'Estado', visual: '<div class="w-24 h-12 border border-gray-400 rounded-lg flex items-center justify-center text-sm">Estado</div>', desc: 'Una condición o situación en la vida de un objeto durante la cual su satisfacción es constante.' },
+                    { name: 'Estado Inicial', visual: '<div class="w-6 h-6 rounded-full bg-gray-800"></div>', desc: 'Un círculo sólido que indica el punto de partida del flujo de estados.' },
+                    { name: 'Estado Final', visual: '<div class="w-6 h-6 rounded-full bg-gray-800 border-2 border-white ring-2 ring-gray-800"></div>', desc: 'Un círculo sólido dentro de otro círculo, que indica el fin del ciclo de vida.' },
+                    { name: 'Transición', visual: '<div class="w-full text-gray-500 text-2xl">→ [Evento]</div>', desc: 'Una flecha de un estado a otro, etiquetada con el evento que la dispara.' }
+                ],
+                structure: 'Se compone de estados (rectángulos con esquinas redondeadas) y transiciones (flechas). Comienza en un estado inicial y fluye a través de diferentes estados en respuesta a eventos hasta llegar, potencialmente, a un estado final.',
+                scenario: 'Perfecto para modelar objetos complejos con un comportamiento dinámico significativo, como una conexión de red, una orden de compra, o la interfaz de un reproductor de video. Ayuda a entender todos los posibles ciclos de vida de un objeto.',
+                standardExampleTopic: 'Ciclo de vida de un objeto "Ticket de Soporte" (Abierto, Asignado, Resuelto, Cerrado).'
+            },
+            'actividades': {
+                title: 'Diagrama de Actividades',
+                category: 'comportamiento',
+                definition: 'Representa flujos de trabajo o procesos. Muestra el flujo de control de una actividad a otra, y es útil para modelar la lógica de negocio, procesos y operaciones complejas.',
+                components: [
+                    { name: 'Acción', visual: '<div class="w-24 h-12 border border-gray-400 rounded-lg flex items-center justify-center text-sm">Hacer algo</div>', desc: 'Un paso en la actividad. Es la unidad fundamental de trabajo.' },
+                    { name: 'Nodo de Decisión', visual: '<div class="w-10 h-10 bg-white transform rotate-45 border border-gray-400"></div>', desc: 'Un rombo que representa un punto donde el flujo se bifurca en varias rutas posibles, basado en una condición.' },
+                    { name: 'Nodo de Unión', visual: '<div class="w-10 h-10 bg-white transform rotate-45 border border-gray-400"></div>', desc: 'Un rombo que fusiona múltiples flujos alternativos en uno solo.' },
+                    { name: 'Nodos de Bifurcación/Unión (Fork/Join)', visual: '<div class="w-full h-1.5 bg-gray-800 rounded-full"></div>', desc: 'Una barra gruesa. La bifurcación divide el flujo en actividades paralelas; la unión las sincroniza de nuevo.' }
+                ],
+                structure: 'Es similar a un diagrama de flujo. Comienza con un nodo inicial, fluye a través de acciones y nodos de decisión/bifurcación conectados por flechas, y termina en un nodo final. Se pueden usar "calles" (swimlanes) para asignar actividades a responsables.',
+                scenario: 'Excelente para modelar procesos de negocio, algoritmos complejos o la lógica de una operación de un caso de uso. Ayuda a visualizar y optimizar flujos de trabajo.',
+                standardExampleTopic: 'Proceso de aprobación y publicación de un artículo en un blog.'
+            },
+            'clases': {
+                title: 'Diagrama de Clases',
+                category: 'estructural',
+                definition: 'Describe la estructura estática de un sistema, mostrando sus clases, atributos, operaciones (o métodos) y las relaciones entre los objetos. Es el pilar del modelado orientado a objetos.',
+                components: [
+                    { name: 'Clase', visual: '<div class="w-32 border border-gray-400 text-xs text-left"><div class="p-1 font-bold text-center">Nombre</div><div class="p-1 border-t border-gray-400">- atributo: tipo</div><div class="p-1 border-t border-gray-400">+ metodo(): void</div></div>', desc: 'La plantilla para crear objetos. Se representa con un rectángulo dividido en tres: nombre, atributos y operaciones.' },
+                    { name: 'Asociación', visual: '<div class="w-full h-px bg-gray-500"></div>', desc: 'Indica que los objetos de una clase están conectados a objetos de otra. Puede tener multiplicidad (ej. 1, *, 0..1).' },
+                    { name: 'Herencia (Generalización)', visual: '<div class="w-0 h-0 border-l-[12px] border-l-transparent border-r-[12px] border-r-transparent border-b-[20px] border-b-white ring-1 ring-gray-400"></div>', desc: 'Una flecha con punta triangular hueca que apunta de la subclase a la superclase. Representa una relación "es un".' },
+                    { name: 'Agregación/Composición', visual: '<div class="w-5 h-5 bg-white transform rotate-45 border border-gray-400"></div>', desc: 'Un rombo en el extremo de una asociación. Rombo hueco (agregación) es "tiene un"; rombo relleno (composición) es "es parte de" (con ciclo de vida dependiente).' }
+                ],
+                structure: 'Consiste en un conjunto de clases (rectángulos) conectadas por líneas que representan sus relaciones estáticas (asociación, herencia, etc.). Es un mapa conceptual del dominio del problema o la solución.',
+                scenario: 'Fundamental en cualquier proyecto orientado a objetos. Se usa para diseñar la arquitectura del sistema, entender el dominio, generar código base y como documentación principal del modelo estático.',
+                standardExampleTopic: 'Modelo de clases de un sistema de comercio electrónico (Producto, Carrito, Cliente, Pedido).'
+            },
+            'objetos': {
+                title: 'Diagrama de Objetos',
+                category: 'estructural',
+                definition: 'Muestra un conjunto de objetos y sus enlaces en un momento específico en el tiempo. Es una "instantánea" de las instancias de las cosas que se encuentran en un diagrama de clases.',
+                components: [
+                    { name: 'Objeto (Instancia)', visual: '<div class="w-32 h-10 border border-gray-400 flex items-center justify-center text-sm"><u>nombreObj: NombreClase</u></div>', desc: 'Un rectángulo que representa una instancia específica de una clase. El nombre está subrayado.' },
+                    { name: 'Enlace (Link)', visual: '<div class="w-full h-px bg-gray-500"></div>', desc: 'Una línea sólida que conecta dos instancias de objeto, representando una instancia de una asociación.' }
+                ],
+                structure: 'Similar a un diagrama de clases, pero utiliza objetos (rectángulos con nombres subrayados) en lugar de clases, y enlaces en lugar de asociaciones. Muestra datos y relaciones concretas.',
+                scenario: 'Útil para ejemplificar un diagrama de clases complejo, mostrando cómo se verían las instancias en tiempo de ejecución. Ayuda a verificar la exactitud y la completitud de un diagrama de clases.',
+                standardExampleTopic: 'Instancia de una transacción bancaria concreta entre dos cuentas.'
+            },
+            'componentes': {
+                title: 'Diagrama de Componentes',
+                category: 'estructural',
+                definition: 'Describe cómo un sistema de software se divide en componentes y muestra las dependencias entre ellos. Modela la vista de implementación del sistema.',
+                components: [
+                    { name: 'Componente', visual: '<div class="w-24 h-16 bg-white border border-gray-400 flex items-start justify-start pt-1 pl-2 relative"><div class="font-bold text-sm">Comp</div><div class="absolute top-2 right-[-8px] w-6 h-8 border border-gray-400 bg-white"><div class="h-1/2 border-b border-gray-400"></div></div></div>', desc: 'Una parte modular y reemplazable de un sistema que encapsula su contenido y expone sus funcionalidades a través de interfaces.' },
+                    { name: 'Interfaz', visual: '<div class="w-6 h-6 rounded-full border border-gray-400"></div>', desc: 'Un círculo (interfaz proporcionada) o semicírculo/socket (interfaz requerida) que define un conjunto de operaciones que un componente ofrece o necesita.' },
+                    { name: 'Dependencia', visual: '<div class="w-full text-gray-500 text-2xl">--&gt;</div>', desc: 'Una flecha discontinua que muestra que un componente depende de otro (por ejemplo, para compilar).' }
+                ],
+                structure: 'Muestra un conjunto de componentes y sus relaciones. Los componentes se conectan a través de sus interfaces (proporcionadas y requeridas) o mediante flechas de dependencia directa.',
+                scenario: 'Esencial para entender la arquitectura de sistemas complejos. Se usa para planificar la organización del código fuente, gestionar dependencias y diseñar sistemas basados en componentes (como microservicios).',
+                standardExampleTopic: 'Estructura de componentes de una aplicación web dividida en Frontend, Backend y Base de Datos.'
+            },
+            'despliegue': {
+                title: 'Diagrama de Despliegue',
+                category: 'estructural',
+                definition: 'Modela la disposición física del hardware (nodos) y el software (artefactos) en un sistema. Muestra dónde se ejecuta el software.',
+                components: [
+                    { name: 'Nodo', visual: '<div class="w-24 h-20 border border-gray-400 flex items-center justify-center relative shadow-md" style="perspective: 100px;"><div class="absolute w-full h-full border border-gray-400" style="transform: translateZ(-20px);"></div><div style="transform: translateZ(10px);">Servidor</div></div>', desc: 'Un recurso computacional físico, como un servidor, un dispositivo embebido o una estación de trabajo.' },
+                    { name: 'Artefacto', visual: '<div class="w-24 h-10 bg-white border border-gray-400 flex items-center p-2 text-sm relative"><span class="absolute top-[-8px] right-1 text-2xl">📄</span>app.jar</div>', desc: 'Una pieza física de información, como un archivo ejecutable (.jar, .exe), una librería (.dll) o un script.' },
+                    { name: 'Asociación de Comunicación', visual: '<div class="w-full h-px bg-gray-500"></div>', desc: 'Una línea sólida entre nodos que representa una ruta de comunicación, como una conexión de red.' }
+                ],
+                structure: 'Consiste en nodos (cajas 3D) que contienen artefactos. Los nodos están conectados para mostrar la topología de la red. Los artefactos se dibujan dentro de los nodos donde residen.',
+                scenario: 'Crucial para la planificación de la infraestructura de TI, el rendimiento, la escalabilidad y la gestión de la configuración. Se usa para sistemas distribuidos, embebidos o cualquier sistema donde la topología física es importante.',
+                standardExampleTopic: 'Despliegue de una aplicación web en un servidor front-end y un servidor de base de datos.'
+            },
+            'paquetes': {
+                title: 'Diagrama de Paquetes',
+                category: 'estructural',
+                definition: 'Organiza los elementos de un modelo (como clases o casos de uso) en grupos, de forma similar a como se usan las carpetas en un sistema de archivos. Ayuda a gestionar la complejidad de modelos grandes.',
+                components: [
+                    { name: 'Paquete', visual: '<div class="w-28 h-20 bg-white border border-gray-400 relative"><div class="absolute top-0 left-0 w-12 h-6 border-r border-b border-gray-400 bg-white p-1 text-sm">Nombre</div></div>', desc: 'Un mecanismo de agrupación para organizar los elementos del modelo. Se representa como una carpeta de archivos.' },
+                    { name: 'Dependencia de Importación', visual: '<div class="w-full text-gray-500 text-sm">--&gt; &lt;&lt;import&gt;&gt;</div>', desc: 'Una flecha discontinua que indica que un paquete importa el contenido público de otro, haciéndolo visible en su interior.' },
+                    { name: 'Dependencia de Acceso', visual: '<div class="w-full text-gray-500 text-sm">--&gt; &lt;&lt;access&gt;&gt;</div>', desc: 'Similar a import, pero el contenido importado es privado y no visible fuera del paquete que lo importa.' }
+                ],
+                structure: 'Muestra una serie de "carpetas" (paquetes) que pueden contener otros paquetes o elementos del modelo. Las líneas de dependencia entre ellos muestran las relaciones y visibilidad entre los grupos.',
+                scenario: 'Indispensable para gestionar modelos grandes y complejos. Ayuda a definir una arquitectura de alto nivel, organizar el sistema en subsistemas lógicos y controlar las dependencias entre las diferentes partes del software.',
+                standardExampleTopic: 'Organización de paquetes en un sistema de gestión de clientes (Paquete UI, Paquete Lógica de Negocio, Paquete de Persistencia).'
+            },
+            'crc': {
+                title: 'Tarjetas CRC (Clase-Responsabilidad-Colaborador)',
+                category: 'diseno',
+                definition: 'Una técnica de lluvia de ideas orientada a objetos, utilizada en las primeras etapas del diseño. No es un diagrama UML formal, sino una herramienta de taller que utiliza tarjetas de fichero para identificar y asignar responsabilidades a las clases.',
+                components: [
+                    { name: 'Nombre de la Clase', visual: '<div class="w-full h-full flex items-center justify-center font-bold">NombreClase</div>', desc: 'En la parte superior de la tarjeta. Identifica la entidad o concepto que se está modelando.' },
+                    { name: 'Responsabilidades', visual: '<ul class="text-left text-xs list-disc list-inside"><li>Saber algo...</li><li>Hacer algo...</li></ul>', desc: 'En el lado izquierdo. Una lista de alto nivel de las obligaciones de la clase (lo que sabe y lo que hace).' },
+                    { name: 'Colaboradores', visual: '<ul class="text-left text-xs list-disc list-inside"><li>OtraClase</li><li>ServicioExterno</li></ul>', desc: 'En el lado derecho. Una lista de otras clases con las que esta clase necesita interactuar para cumplir sus responsabilidades.' }
+                ],
+                structure: 'Una tarjeta física (o su equivalente digital) se divide en tres secciones: el nombre de la clase arriba, y dos columnas debajo para Responsabilidades y Colaboradores. Se crean múltiples tarjetas, una por cada clase potencial.',
+                scenario: 'Perfecto para sesiones de diseño colaborativo y dinámico, especialmente en metodologías ágiles como Extreme Programming (XP). Fomenta la discusión, ayuda a distribuir la inteligencia del sistema y es una forma de bajo coste para explorar un diseño antes de formalizarlo.',
+                standardExampleTopic: 'Definición de las tarjetas CRC para el sistema de alquiler de películas.'
+            }
+        };
+
+        // --- Configuración e Inicialización de Firebase (Requerido por las instrucciones, aunque no se use en este demo) ---
+        const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : '';
+        // -----------------------------------------------------------------------------------------------------------------
+
+        // --- Funciones para la API de Gemini ---
+
+        const LLM_MODEL = 'gemini-2.5-flash-preview-05-20';
+        const apiKey = "";
+        const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${LLM_MODEL}:generateContent?key=${apiKey}`;
+
+        async function exponentialBackoffFetch(url, options, maxRetries = 5) {
+            for (let i = 0; i < maxRetries; i++) {
+                try {
+                    const response = await fetch(url, options);
+                    if (response.status !== 429) { 
+                        return response;
+                    }
+                    const delay = Math.pow(2, i) * 1000;
+                    await new Promise(resolve => setTimeout(resolve, delay));
+                } catch (error) {
+                    if (i === maxRetries - 1) throw error;
+                    const delay = Math.pow(2, i) * 1000;
+                    await new Promise(resolve => setTimeout(resolve, delay));
+                }
+            }
+            throw new Error('LLM request failed after multiple retries.');
+        }
+
+        async function generateScenario(diagramTitle, userTopic, isStandard) {
+            let systemPrompt;
+            let userQuery;
+            
+            if (isStandard) {
+                systemPrompt = `Eres un arquitecto de software experto en modelado UML. Genera un ejemplo fundamental y didáctico para el diagrama especificado. El resultado debe ser una explicación clara de cómo se verían los elementos principales del diagrama en el contexto del tema proporcionado, ideal para estudiantes. Responde en español y utiliza formato Markdown para listas y énfasis. NO uses encabezados (##).`;
+                userQuery = `Diagrama a aplicar: ${diagramTitle}. Tema/Dominio para el ejemplo fundamental: ${userTopic}. Genera el escenario de aplicación.`;
+            } else {
+                systemPrompt = `Eres un arquitecto de software experto en el modelado con UML. Tu tarea es generar un escenario práctico, detallado y paso a paso para la aplicación del diagrama especificado al tema proporcionado. El resultado debe ser una explicación clara de cómo se verían los elementos principales del diagrama en ese contexto. Responde en español y utiliza formato Markdown para listas y énfasis.`;
+                userQuery = `Diagrama a aplicar: ${diagramTitle}. Tema/Dominio: ${userTopic}. Genera el escenario de aplicación.`;
+            }
+
+            const payload = {
+                contents: [{ parts: [{ text: userQuery }] }],
+                systemInstruction: { parts: [{ text: systemPrompt }] },
+            };
+
+            try {
+                const response = await exponentialBackoffFetch(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                const result = await response.json();
+                const text = result.candidates?.[0]?.content?.parts?.[0]?.text;
+                
+                if (text) {
+                    return text;
+                } else {
+                    return 'Error al procesar la respuesta del modelo. Intenta con una consulta diferente.';
+                }
+            } catch (error) {
+                console.error('API Error:', error);
+                return 'Hubo un error en la comunicación con el servicio de IA. Inténtalo de nuevo.';
+            }
+        }
+        
+        // --- Lógica de la Interfaz ---
+
+        const categoryNav = document.getElementById('category-nav');
+        const diagramNavContainer = document.getElementById('diagram-nav-container');
+        const diagramNav = document.getElementById('diagram-nav');
+        const contentDisplay = document.getElementById('content-display');
+        const initialMessage = document.getElementById('initial-message');
+
+        const diagramsByCategory = {
+            comportamiento: ['caso-de-uso', 'secuencia', 'actividades', 'estados', 'comunicacion'],
+            estructural: ['clases', 'objetos', 'componentes', 'despliegue', 'paquetes'],
+            diseno: ['crc']
+        };
+        
+        function renderDiagram(diagramId) {
+            const data = diagramData[diagramId];
+            if (!data) return '';
+
+            const componentsHTML = data.components.map(comp => `
+                <div class="border border-gray-200 rounded-lg p-4 flex flex-col items-center text-center bg-white transform hover:scale-105 transition-transform duration-200 shadow-sm">
+                    <div class="component-visual">${comp.visual}</div>
+                    <h4 class="font-bold text-gray-800 text-base mb-1">${comp.name}</h4>
+                    <p class="text-gray-600 text-sm">${comp.desc}</p>
+                </div>
+            `).join('');
+
+            // Sección del LLM Generator
+            const llmGeneratorHTML = `
+                <div class="mt-12 pt-8 border-t-2 border-blue-200 bg-white p-6 rounded-xl shadow-lg">
+                    <h3 class="text-2xl font-bold text-blue-700 mb-4 flex items-center">
+                        ✨ Ejemplos Prácticos con IA
+                    </h3>
+                    <p class="text-gray-700 mb-6">Puedes elegir un ejemplo fundamental para entender rápidamente el diagrama, o crear un escenario personalizado para tu proyecto.</p>
+                    
+                    <!-- Botón para Ejemplo Estándar -->
+                    <button id="standard-btn-${diagramId}" data-diagram-id="${diagramId}" data-topic="${data.standardExampleTopic}" class="w-full md:w-auto px-6 py-3 bg-green-600 text-white font-semibold rounded-lg shadow-md hover:bg-green-700 transition-colors duration-300 flex items-center justify-center mb-4 md:mr-4">
+                        <span class="mr-2">💡</span> Mostrar Ejemplo Estándar: ${data.standardExampleTopic}
+                    </button>
+
+                    <div class="mt-4 border-t pt-4">
+                        <h4 class="text-xl font-semibold text-gray-800 mb-3">Generador de Escenarios Personalizados</h4>
+                        <textarea id="topic-input-${diagramId}" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 mb-4" rows="2" placeholder="Introduce un tema o dominio específico (ej: 'Proceso de reserva de asientos de cine')"></textarea>
+                        
+                        <button id="generate-btn-${diagramId}" data-diagram-id="${diagramId}" class="w-full md:w-auto px-6 py-3 bg-blue-600 text-white font-semibold rounded-lg shadow-md hover:bg-blue-700 transition-colors duration-300 flex items-center justify-center">
+                            <span class="mr-2">🚀</span> Generar Escenario Personalizado
+                        </button>
+                    </div>
+
+                    <div id="result-area-${diagramId}" class="mt-6 p-4 bg-gray-50 border border-gray-200 rounded-lg min-h-[50px]">
+                        <p class="text-gray-500">El resultado del ejemplo aparecerá aquí.</p>
+                    </div>
+                </div>
+            `;
+            
+            return `
+                <div id="${diagramId}" class="diagram-content bg-stone-100 rounded-xl shadow-lg p-6 md:p-8">
+                    <h2 class="text-3xl font-bold text-gray-900 mb-4">${data.title}</h2>
+                    <p class="text-lg text-gray-700 mb-6">${data.definition}</p>
+                    
+                    <div class="mb-8">
+                        <h3 class="text-2xl font-semibold text-gray-800 mb-4 border-b-2 border-blue-200 pb-2">Componentes Clave</h3>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">${componentsHTML}</div>
+                    </div>
+
+                    <div class="grid md:grid-cols-2 gap-8">
+                        <div>
+                            <h3 class="text-2xl font-semibold text-gray-800 mb-4 border-b-2 border-blue-200 pb-2">¿Cómo se Constituye?</h3>
+                            <p class="text-gray-700">${data.structure}</p>
+                        </div>
+                        <div>
+                            <h3 class="text-2xl font-semibold text-gray-800 mb-4 border-b-2 border-blue-200 pb-2">Escenario Ideal de Uso</h3>
+                            <p class="text-gray-700">${data.scenario}</p>
+                        </div>
+                    </div>
+
+                    ${llmGeneratorHTML}
+                </div>
+            `;
+        }
+
+        // --- Lógica del Listener para el Generador ---
+        
+        async function handleGeneration(diagramId, userTopic, isStandard = false, standardButtonId = null) {
+            const generateButton = isStandard ? document.getElementById(standardButtonId) : document.getElementById(`generate-btn-${diagramId}`);
+            const resultArea = document.getElementById(`result-area-${diagramId}`);
+            const input = document.getElementById(`topic-input-${diagramId}`);
+            const diagramTitle = diagramData[diagramId].title;
+
+            if (!isStandard && userTopic.length < 5) {
+                resultArea.innerHTML = '<p class="text-red-500">Por favor, introduce un tema o dominio más detallado (mínimo 5 caracteres).</p>';
+                return;
+            }
+
+            // Mostrar estado de carga
+            const originalText = generateButton.innerHTML;
+            generateButton.disabled = true;
+            generateButton.innerHTML = '<div class="loader mr-2"></div> Generando...';
+            resultArea.innerHTML = '<div class="flex items-center text-blue-600"><div class="loader mr-3"></div> Creando escenario de aplicación detallado, espera un momento...</div>';
+
+            try {
+                const scenarioText = await generateScenario(diagramTitle, userTopic, isStandard);
+                
+                // Limpiar el input después de una generación personalizada exitosa
+                if (!isStandard) input.value = '';
+
+                // Convertir texto Markdown a HTML básico para visualización
+                const formattedHtml = markdownToHtml(scenarioText);
+
+                resultArea.innerHTML = formattedHtml;
+
+            } catch (error) {
+                resultArea.innerHTML = `<p class="text-red-500">Error: No se pudo generar el escenario. ${error.message}</p>`;
+            } finally {
+                // Restaurar botón
+                generateButton.innerHTML = originalText;
+                generateButton.disabled = false;
+            }
+        }
+
+        function setupLlmGeneratorListener(diagramId) {
+            const customButton = document.getElementById(`generate-btn-${diagramId}`);
+            const standardButton = document.getElementById(`standard-btn-${diagramId}`);
+            const input = document.getElementById(`topic-input-${diagramId}`);
+
+            if (customButton) {
+                customButton.addEventListener('click', () => {
+                    const userTopic = input.value.trim();
+                    handleGeneration(diagramId, userTopic, false);
+                });
+            }
+
+            if (standardButton) {
+                standardButton.addEventListener('click', () => {
+                    const standardTopic = standardButton.dataset.topic;
+                    handleGeneration(diagramId, standardTopic, true, `standard-btn-${diagramId}`);
+                });
+            }
+        }
+        
+        // Función auxiliar para convertir Markdown simple (usado por el LLM) a HTML
+        function markdownToHtml(markdown) {
+            let html = markdown
+                .replace(/^### (.*$)/gim, '<strong>$1</strong>') 
+                .replace(/^## (.*$)/gim, '<strong>$1</strong>') 
+                .replace(/^# (.*$)/gim, '<strong>$1</strong>')
+                .replace(/^\* (.*$)/gim, '<li>$1</li>')
+                .replace(/(\*\*)(.*?)\1/gim, '<strong>$2</strong>')
+                .replace(/(\*)(.*?)\1/gim, '<em>$2</em>');
+            
+            // Reemplazar listas (si se generaron)
+            if (html.includes('<li>')) {
+                html = '<ul>' + html.split('<li>').slice(1).map(item => `<li>${item}`).join('') + '</ul>';
+            }
+
+            // Asegurar que los saltos de línea se conviertan en párrafos o <br>
+            html = html.split('\n').filter(line => line.trim() !== '').map(line => {
+                if (line.startsWith('<ul>')) return line;
+                if (line.startsWith('<strong>')) return `<p class="mt-4">${line}</p>`;
+                return `<p class="text-gray-700 mb-2">${line}</p>`;
+            }).join('');
+
+            return html;
+        }
+
+
+        function selectDiagram(diagramId) {
+            document.querySelectorAll('.diagram-btn').forEach(btn => btn.classList.remove('active-diagram'));
+            document.querySelector(`[data-diagram="${diagramId}"]`).classList.add('active-diagram');
+            
+            initialMessage.classList.add('hidden');
+            contentDisplay.innerHTML = renderDiagram(diagramId);
+            
+            // CRÍTICO: Configurar el listener del generador después de renderizar el contenido
+            setupLlmGeneratorListener(diagramId);
+        }
+        
+        function selectCategory(category) {
+            document.querySelectorAll('.category-btn').forEach(btn => btn.classList.remove('active-category'));
+            document.querySelector(`[data-category="${category}"]`).classList.add('active-category');
+
+            const diagramIds = diagramsByCategory[category];
+            diagramNav.innerHTML = diagramIds.map(id => {
+                const title = diagramData[id].title;
+                return `<button data-diagram="${id}" class="diagram-btn font-medium py-2 px-4 rounded-md border-2 border-gray-300 bg-white text-gray-600 hover:bg-gray-50 transition-colors duration-200">${title}</button>`;
+            }).join('');
+            
+            document.querySelectorAll('.diagram-btn').forEach(btn => {
+                btn.addEventListener('click', () => selectDiagram(btn.dataset.diagram));
+            });
+            
+            if (diagramIds.length > 0) {
+                selectDiagram(diagramIds[0]);
+            } else {
+                 contentDisplay.innerHTML = '';
+                 initialMessage.classList.remove('hidden');
+            }
+        }
+
+        categoryNav.addEventListener('click', (e) => {
+            if (e.target.matches('.category-btn')) {
+                selectCategory(e.target.dataset.category);
+            }
+        });
+        
+        // Initially select the first category
+        document.querySelector('.category-btn').click();
+
+    </script>
+</body>
+</html>
